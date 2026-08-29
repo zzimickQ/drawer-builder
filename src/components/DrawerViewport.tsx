@@ -1,7 +1,10 @@
 import { Canvas } from '@react-three/fiber'
-import { Info } from 'lucide-react'
+import { Focus, Info } from 'lucide-react'
 
-import { DrawerScene } from '@/components/DrawerScene'
+import {
+  DEFAULT_CAMERA_POSITION,
+  DrawerScene,
+} from '@/components/DrawerScene'
 import { Button } from '@/components/ui/button'
 import {
   Popover,
@@ -10,6 +13,7 @@ import {
 } from '@/components/ui/popover'
 import { Slider } from '@/components/ui/slider'
 import { useDrawerStore } from '@/store/useDrawerStore'
+import { useSettingsStore } from '@/store/useSettingsStore'
 
 const SHORTCUTS: { keys: string[]; action: string }[] = [
   { keys: ['Left-drag'], action: 'Rotate the view' },
@@ -60,12 +64,16 @@ export function DrawerViewport() {
   const config = useDrawerStore((state) => state.config)
   const carcassOpacity = useDrawerStore((state) => state.carcassOpacity)
   const setCarcassOpacity = useDrawerStore((state) => state.setCarcassOpacity)
+  const requestViewportReset = useSettingsStore(
+    (state) => state.requestViewportReset,
+  )
+  const setConfig = useDrawerStore((state) => state.setConfig)
 
   return (
     <div className="relative h-full w-full overflow-hidden">
       <Canvas
         className="absolute inset-0"
-        camera={{ position: [4.2, 3, 5.6], fov: 45 }}
+        camera={{ position: DEFAULT_CAMERA_POSITION, fov: 45 }}
         dpr={[1, 2]}
       >
         <DrawerScene config={config} carcassOpacity={carcassOpacity} />
@@ -90,8 +98,33 @@ export function DrawerViewport() {
         </div>
       </div>
 
-      <div className="absolute top-3 right-3 z-10 rounded-md border bg-background/85 px-3 py-1.5 text-xs font-medium backdrop-blur-sm">
-        Pull-out: {Math.round(config.pullOut)}%
+      <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
+        <div className="flex items-center gap-2 rounded-md border bg-background/85 px-3 py-1.5 text-xs font-medium backdrop-blur-sm">
+          <span className="whitespace-nowrap">Pull-out</span>
+          <Slider
+            className="w-36! shrink-0"
+            min={0}
+            max={100}
+            step={1}
+            value={config.pullOut}
+            onValueChange={(next) =>
+              setConfig({ pullOut: typeof next === 'number' ? next : next[0] })
+            }
+            aria-label="Drawer pull-out"
+          />
+          <span className="w-8 text-right tabular-nums">
+            {Math.round(config.pullOut)}%
+          </span>
+        </div>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={requestViewportReset}
+          aria-label="Reset viewport"
+          title="Reset view"
+        >
+          <Focus className="size-4" />
+        </Button>
       </div>
 
       <div className="pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-md border bg-background/85 px-3 py-1.5 text-xs text-muted-foreground whitespace-nowrap backdrop-blur-sm">

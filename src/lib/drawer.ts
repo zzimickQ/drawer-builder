@@ -1,3 +1,5 @@
+import { UNIT_LABEL, formatMm, type DisplayUnit } from '@/lib/units'
+
 export type FaceType = 'inset' | 'outset'
 
 export interface DrawerConfig {
@@ -13,6 +15,8 @@ export interface DrawerConfig {
   boxThickness: number
   /** Drawer bottom panel thickness in mm */
   bottomThickness: number
+  /** Face attachment panel thickness in mm */
+  faceThickness: number
   /** Face style: flush with opening (inset) or overlapping carcass (outset) */
   faceType: FaceType
   /** Outset face overhang on each side (left/right) in mm */
@@ -30,6 +34,7 @@ export const DEFAULT_CONFIG: DrawerConfig = {
   slideThickness: 10,
   boxThickness: 12,
   bottomThickness: 8,
+  faceThickness: 18,
   faceType: 'inset',
   outsetSides: 20,
   outsetTopBottom: 10,
@@ -48,8 +53,6 @@ export function clamp(value: number, min: number, max: number): number {
 export const CARCASS_T = 18
 /** Gap left at the back of the carcass for slide travel (mm) */
 export const BACK_CLEARANCE = 10
-/** Face attachment panel thickness (mm) */
-export const FACE_T = 18
 /** Height of the bottom panel top face above the box bottom edge (mm) */
 export const DADO_INSET = 6
 /** Dado groove depth for the bottom panel (mm) */
@@ -68,12 +71,18 @@ export interface DrawerDims {
   drawerW: number
   /** Drawer box outer height (mm) */
   drawerH: number
-  /** Drawer box outer depth (mm) */
+  /** Drawer box outer depth (mm) — inclusive of the face for inset style */
   drawerD: number
+  /** Drawer box panel depth (mm) — reduced by the face thickness when inset */
+  boxDepth: number
+  /** Z offset of the box front relative to the carcass front (mm) */
+  boxZOffset: number
   /** Face attachment width (mm) */
   faceW: number
   /** Face attachment height (mm) */
   faceH: number
+  /** Face attachment thickness (mm) */
+  faceThickness: number
 }
 
 export function computeDims(config: DrawerConfig): DrawerDims {
@@ -81,10 +90,25 @@ export function computeDims(config: DrawerConfig): DrawerDims {
   const drawerH = Math.max(1, config.openingH - 6)
   const drawerD = Math.max(1, config.openingD - BACK_CLEARANCE)
   const isOutset = config.faceType === 'outset'
+  const faceThickness = Math.max(1, config.faceThickness)
+  // Inset style: the drawer's depth is inclusive of the face, so the box is
+  // shallower by the face thickness and the whole assembly (face + box) sits
+  // within the carcass, with the face taken in so its front is flush.
+  const boxDepth = isOutset ? drawerD : Math.max(1, drawerD - faceThickness)
+  const boxZOffset = isOutset ? 0 : -faceThickness
   const faceW = isOutset ? config.openingW + 2 * config.outsetSides : config.openingW
   const faceH =
     isOutset ? config.openingH + 2 * config.outsetTopBottom : config.openingH
-  return { drawerW, drawerH, drawerD, faceW, faceH }
+  return {
+    drawerW,
+    drawerH,
+    drawerD,
+    boxDepth,
+    boxZOffset,
+    faceW,
+    faceH,
+    faceThickness,
+  }
 }
 
 /**
@@ -133,15 +157,16 @@ export function computeBoards(config: DrawerConfig): Boards {
     boxThickness: T,
     bottomThickness: B,
   } = config
-  const { drawerW, drawerH, drawerD, faceW, faceH } = computeDims(config)
+  const { drawerW, drawerH, boxDepth, faceW, faceH, faceThickness } =
+    computeDims(config)
 
   // Drawer box, standard dado construction
   const side = (x: number): Board => ({
     id: x < 0 ? 'box-side-l' : 'box-side-r',
     name: 'Side',
     qty: 1,
-    size: [T, drawerH, drawerD],
-    position: [x, 0, -drawerD / 2],
+    size: [T, drawerH, boxDepth],
+    position: [x, 0, -boxDepth / 2],
   })
   const box: Board[] = [
     side(-(drawerW - T) / 2),
@@ -158,14 +183,14 @@ export function computeBoards(config: DrawerConfig): Boards {
       name: 'Back',
       qty: 1,
       size: [drawerW - 2 * T, drawerH, T],
-      position: [0, 0, -drawerD + T / 2],
+      position: [0, 0, -boxDepth + T / 2],
     },
     {
       id: 'box-bottom',
       name: 'Bottom',
       qty: 1,
-      size: [drawerW - 2 * T, B, drawerD - 2 * T],
-      position: [0, -drawerH / 2 + DADO_INSET + B / 2, -drawerD / 2],
+      size: [drawerW - 2 * T, B, boxDepth - 2 * T],
+      position: [0, -drawerH / 2 + DADO_INSET + B / 2, -boxDepth / 2],
     },
   ]
 
@@ -176,15 +201,15 @@ export function computeBoards(config: DrawerConfig): Boards {
       id: 'groove-side-l',
       name: 'Dado (side)',
       qty: 1,
-      size: [DADO_VISIBLE, B + 1, drawerD - 2 * T],
-      position: [-(drawerW - 2 * T) / 2 - DADO_VISIBLE / 2, grooveY, -drawerD / 2],
+      size: [DADO_VISIBLE, B + 1, boxDepth - 2 * T],
+      position: [-(drawerW - 2 * T) / 2 - DADO_VISIBLE / 2, grooveY, -boxDepth / 2],
     },
     {
       id: 'groove-side-r',
       name: 'Dado (side)',
       qty: 1,
-      size: [DADO_VISIBLE, B + 1, drawerD - 2 * T],
-      position: [(drawerW - 2 * T) / 2 + DADO_VISIBLE / 2, grooveY, -drawerD / 2],
+      size: [DADO_VISIBLE, B + 1, boxDepth - 2 * T],
+      position: [(drawerW - 2 * T) / 2 + DADO_VISIBLE / 2, grooveY, -boxDepth / 2],
     },
     {
       id: 'groove-front',
@@ -198,7 +223,7 @@ export function computeBoards(config: DrawerConfig): Boards {
       name: 'Dado (back)',
       qty: 1,
       size: [drawerW - 2 * T - 4, B + 1, DADO_VISIBLE],
-      position: [0, grooveY, -drawerD + T - DADO_VISIBLE / 2],
+      position: [0, grooveY, -boxDepth + T - DADO_VISIBLE / 2],
     },
   ]
 
@@ -225,14 +250,16 @@ export function computeBoards(config: DrawerConfig): Boards {
     },
   ]
 
-  // Face attachment — fastened to the front of the box, protruding forward
+  // Face attachment — fastened to the front of the box. Inset style: the
+  // whole box group is shifted back by the face thickness so the face front
+  // sits flush inside the carcass opening.
   const face: Board[] = [
     {
       id: 'face',
       name: 'Face',
       qty: 1,
-      size: [faceW, faceH, FACE_T],
-      position: [0, 0, FACE_T / 2],
+      size: [faceW, faceH, faceThickness],
+      position: [0, 0, faceThickness / 2],
     },
   ]
 
@@ -308,17 +335,20 @@ export function buildCutlist(config: DrawerConfig): Cutlist {
   return { groups, totalBoards }
 }
 
-export function cutlistToText(config: DrawerConfig): string {
+export function cutlistToText(
+  config: DrawerConfig,
+  unit: DisplayUnit = 'mm',
+): string {
   const cutlist = buildCutlist(config)
   const lines: string[] = []
-  lines.push('Drawer cutlist (all dimensions in mm)')
+  lines.push(`Drawer cutlist (all dimensions in ${UNIT_LABEL[unit]})`)
   lines.push('Part — Length × Width × Thickness × Qty')
   lines.push('')
   for (const group of cutlist.groups) {
     lines.push(`${group.label}`)
     for (const row of group.rows) {
       lines.push(
-        `  ${row.part}: ${row.length} × ${row.width} × ${row.thickness} × ${row.qty}`,
+        `  ${row.part}: ${formatMm(row.length, unit)} × ${formatMm(row.width, unit)} × ${formatMm(row.thickness, unit)} × ${row.qty}`,
       )
     }
   }

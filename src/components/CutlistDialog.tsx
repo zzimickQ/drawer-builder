@@ -23,7 +23,9 @@ import {
   buildCutlist,
   cutlistToText,
 } from '@/lib/drawer'
+import { UNIT_LABEL, formatMm } from '@/lib/units'
 import { useDrawerStore } from '@/store/useDrawerStore'
+import { useSettingsStore } from '@/store/useSettingsStore'
 
 interface CutlistDialogProps {
   open: boolean
@@ -32,12 +34,13 @@ interface CutlistDialogProps {
 
 export function CutlistDialog({ open, onOpenChange }: CutlistDialogProps) {
   const config = useDrawerStore((state) => state.config)
+  const displayUnit = useSettingsStore((state) => state.displayUnit)
   const cutlist = useMemo(() => buildCutlist(config), [config])
   const [copied, setCopied] = useState(false)
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(cutlistToText(config))
+      await navigator.clipboard.writeText(cutlistToText(config, displayUnit))
       setCopied(true)
       window.setTimeout(() => setCopied(false), 1500)
     } catch {
@@ -54,7 +57,8 @@ export function CutlistDialog({ open, onOpenChange }: CutlistDialogProps) {
             Cutlist
           </DialogTitle>
           <DialogDescription>
-            All dimensions in mm. Length × Width × Thickness × Qty.
+            All dimensions in {UNIT_LABEL[displayUnit]}. Length × Width ×
+            Thickness × Qty.
           </DialogDescription>
         </DialogHeader>
 
@@ -78,13 +82,13 @@ export function CutlistDialog({ open, onOpenChange }: CutlistDialogProps) {
                   <TableRow key={`${group.id}-${row.part}`}>
                     <TableCell className="font-medium">{row.part}</TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {Math.round(row.length)}
+                      {formatMm(row.length, displayUnit)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {Math.round(row.width)}
+                      {formatMm(row.width, displayUnit)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {Math.round(row.thickness)}
+                      {formatMm(row.thickness, displayUnit)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {row.qty}

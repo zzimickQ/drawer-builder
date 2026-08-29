@@ -11,6 +11,9 @@ import {
   type Board,
   type DrawerConfig,
 } from '@/lib/drawer'
+import { useSettingsStore } from '@/store/useSettingsStore'
+
+export const DEFAULT_CAMERA_POSITION: [number, number, number] = [4.2, 3, 5.6]
 
 interface BoardMaterial {
   color: string
@@ -54,13 +57,15 @@ function DrawerModel({ config }: { config: DrawerConfig }) {
   const dims = useMemo(() => computeDims(config), [config])
   const boards = useMemo(() => computeBoards(config), [config])
 
-  // Smoothly animate the pull-out amount
+  // Smoothly animate the pull-out amount. The box group is offset back by
+  // the inset face thickness and slides out by its own box depth.
   useFrame((_, dt) => {
     const group = groupRef.current
     if (!group) return
     const target = config.pullOut / 100
     pullRef.current = THREE.MathUtils.damp(pullRef.current, target, 8, dt)
-    group.position.z = pullRef.current * dims.drawerD
+    group.position.z =
+      dims.boxZOffset + pullRef.current * dims.boxDepth
   })
 
   return (
@@ -315,6 +320,75 @@ function CarcassGhost({
   )
 }
 
+/**
+ * Persists the camera orientation (position + target) across refresh and
+ * restores it on mount. Reacts to reset requests from the viewport.
+ */
+function PersistCamera({
+  defaultPosition,
+  defaultTarget,
+}: {
+  defaultPosition: [number, number, number]
+  defaultTarget: [number, number, number]
+}) {
+  const camera = useThree((state) => state.camera)
+  const controls = useThree(
+    (state) => state.controls,
+  ) as unknown as OrbitControlsImpl | null
+  const viewport = useSettingsStore((state) => state.viewport)
+  const setViewport = useSettingsStore((state) => state.setViewport)
+  const resetCount = useSettingsStore((state) => state.viewportResetCount)
+
+  // Restore the saved orientation once on mount
+  const restored = useRef(false)
+  useEffect(() => {
+    if (!controls || restored.current) return
+    restored.current = true
+    if (viewport?.cameraPosition && viewport?.target) {
+      camera.position.set(...viewport.cameraPosition)
+      controls.target.set(...viewport.target)
+      controls.update()
+    }
+  }, [camera, controls, viewport])
+
+  // Save the orientation as the user navigates (throttled, plus on release)
+  useEffect(() => {
+    if (!controls) return
+    let lastSave = 0
+    const save = () => {
+      setViewport({
+        cameraPosition: [camera.position.x, camera.position.y, camera.position.z],
+        target: [controls.target.x, controls.target.y, controls.target.z],
+      })
+    }
+    const throttled = () => {
+      const now = performance.now()
+      if (now - lastSave < 250) return
+      lastSave = now
+      save()
+    }
+    controls.addEventListener('change', throttled)
+    controls.addEventListener('end', save)
+    return () => {
+      controls.removeEventListener('change', throttled)
+      controls.removeEventListener('end', save)
+    }
+  }, [camera, controls, setViewport])
+
+  // Reset to the default framing when requested
+  const prevResetCount = useRef(resetCount)
+  useEffect(() => {
+    if (resetCount === prevResetCount.current || !controls) return
+    prevResetCount.current = resetCount
+    camera.position.set(...defaultPosition)
+    controls.target.set(...defaultTarget)
+    controls.update()
+    setViewport(null)
+  }, [resetCount, camera, controls, defaultPosition, defaultTarget, setViewport])
+
+  return null
+}
+
 export function DrawerScene({
   config,
   carcassOpacity,
@@ -366,6 +440,10 @@ export function DrawerScene({
         target={[0, -0.15, targetZ]}
         minDistance={0.8}
         maxDistance={16}
+      />
+      <PersistCamera
+        defaultPosition={DEFAULT_CAMERA_POSITION}
+        defaultTarget={[0, -0.15, targetZ]}
       />
     </>
   )

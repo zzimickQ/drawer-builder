@@ -5,9 +5,11 @@ import {
   ListChecks,
   PanelRightClose,
   RotateCcw,
+  Settings2,
 } from 'lucide-react'
 
 import { CutlistDialog } from '@/components/CutlistDialog'
+import { SettingsDialog } from '@/components/SettingsDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,9 +21,10 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
-import { Slider } from '@/components/ui/slider'
 import { DEFAULT_CONFIG, clamp, type DrawerConfig } from '@/lib/drawer'
+import { UNIT_LABEL, formatMm, unitToMm } from '@/lib/units'
 import { useDrawerStore } from '@/store/useDrawerStore'
+import { useSettingsStore } from '@/store/useSettingsStore'
 
 function NumberField({
   label,
@@ -29,15 +32,14 @@ function NumberField({
   onChange,
   min,
   max,
-  step = 1,
 }: {
   label: string
   value: number
   onChange: (value: number) => void
   min: number
   max: number
-  step?: number
 }) {
+  const displayUnit = useSettingsStore((state) => state.displayUnit)
   const [draft, setDraft] = useState<string | null>(null)
   const [prevValue, setPrevValue] = useState(value)
 
@@ -47,7 +49,7 @@ function NumberField({
     setDraft(null)
   }
 
-  const display = draft ?? String(value)
+  const shown = draft ?? formatMm(value, displayUnit)
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -56,53 +58,23 @@ function NumberField({
         <Input
           type="number"
           inputMode="decimal"
-          min={min}
-          max={max}
-          step={step}
-          value={display}
+          min={formatMm(min, displayUnit)}
+          max={formatMm(max, displayUnit)}
+          step={displayUnit === 'in' ? 0.125 : displayUnit === 'cm' ? 0.5 : 1}
+          value={shown}
           onChange={(event) => {
             setDraft(event.target.value)
             const parsed = parseFloat(event.target.value)
             if (!Number.isNaN(parsed)) {
-              onChange(clamp(parsed, min, max))
+              onChange(clamp(unitToMm(parsed, displayUnit), min, max))
             }
           }}
           onBlur={() => setDraft(null)}
         />
         <span className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-xs text-muted-foreground">
-          mm
+          {UNIT_LABEL[displayUnit]}
         </span>
       </div>
-    </div>
-  )
-}
-
-function SliderField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string
-  value: number
-  onChange: (value: number) => void
-}) {
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between">
-        <Label className="text-xs text-muted-foreground">{label}</Label>
-        <span className="text-sm font-medium tabular-nums">
-          {Math.round(value)}%
-        </span>
-      </div>
-      <Slider
-        min={0}
-        max={100}
-        step={1}
-        value={value}
-        onValueChange={(next) =>
-          onChange(typeof next === 'number' ? next : next[0])
-        }
-      />
     </div>
   )
 }
@@ -114,6 +86,7 @@ export function DrawerSidebar() {
 
   const [collapsed, setCollapsed] = useState(false)
   const [cutlistOpen, setCutlistOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   if (collapsed) {
     return (
@@ -139,14 +112,24 @@ export function DrawerSidebar() {
           <PanelRightClose className="size-4 text-muted-foreground" />
           <h2 className="text-sm font-semibold">Drawer Settings</h2>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setCollapsed(true)}
-          aria-label="Collapse drawer settings"
-        >
-          <ChevronRight className="size-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setSettingsOpen(true)}
+            aria-label="Open settings"
+          >
+            <Settings2 className="size-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setCollapsed(true)}
+            aria-label="Collapse drawer settings"
+          >
+            <ChevronRight className="size-4" />
+          </Button>
+        </div>
       </header>
 
       <div className="flex-1 overflow-y-auto px-4 py-4">
@@ -265,26 +248,20 @@ export function DrawerSidebar() {
                 />
               </div>
             )}
-          </section>
 
-          <Separator />
-
-          <section className="flex flex-col gap-3">
-            <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-              Pull-out
-            </h3>
-            <SliderField
-              label="Drawer extension"
-              value={config.pullOut}
-              onChange={(v) => setConfig({ pullOut: v })}
+            <NumberField
+              label="Face thickness"
+              value={config.faceThickness}
+              min={6}
+              max={40}
+              onChange={(v) => setConfig({ faceThickness: v })}
             />
-            <p className="text-xs text-muted-foreground">
-              {config.pullOut === 0
-                ? 'Drawer is fully closed.'
-                : config.pullOut >= 100
-                  ? 'Drawer is fully extended.'
-                  : 'Drawer partially pulled out.'}
-            </p>
+            {!isOutset && (
+              <p className="text-xs text-muted-foreground">
+                Inset face sits inside the opening, flush with the carcass
+                front; the box depth is reduced by the face thickness.
+              </p>
+            )}
           </section>
         </div>
       </div>
@@ -310,6 +287,7 @@ export function DrawerSidebar() {
       </footer>
 
       <CutlistDialog open={cutlistOpen} onOpenChange={setCutlistOpen} />
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </aside>
   )
 }
