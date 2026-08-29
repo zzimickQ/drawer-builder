@@ -1,5 +1,5 @@
 import { Canvas } from '@react-three/fiber'
-import { Focus, Info } from 'lucide-react'
+import { Focus, Info, List, Settings2 } from 'lucide-react'
 
 import {
   DEFAULT_CAMERA_POSITION,
@@ -12,7 +12,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { Slider } from '@/components/ui/slider'
-import { useDrawerStore } from '@/store/useDrawerStore'
+import { useDrawerStore, selectSelectedConfig } from '@/store/useDrawerStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 
 const SHORTCUTS: { keys: string[]; action: string }[] = [
@@ -60,8 +60,18 @@ function NavHelp() {
   )
 }
 
-export function DrawerViewport() {
-  const config = useDrawerStore((state) => state.config)
+interface DrawerViewportProps {
+  /** Opens the drawer list overlay (mobile) */
+  onOpenDrawers?: () => void
+  /** Opens the settings sidebar overlay (mobile) */
+  onOpenSettings?: () => void
+}
+
+export function DrawerViewport({
+  onOpenDrawers,
+  onOpenSettings,
+}: DrawerViewportProps) {
+  const config = useDrawerStore(selectSelectedConfig)
   const carcassOpacity = useDrawerStore((state) => state.carcassOpacity)
   const setCarcassOpacity = useDrawerStore((state) => state.setCarcassOpacity)
   const requestViewportReset = useSettingsStore(
@@ -79,7 +89,7 @@ export function DrawerViewport() {
         <DrawerScene config={config} carcassOpacity={carcassOpacity} />
       </Canvas>
 
-      <div className="absolute top-3 left-3 z-10 flex items-center gap-2">
+      <div className="absolute top-3 left-3 z-10 flex flex-col items-start gap-2 sm:flex-row sm:items-center">
         <NavHelp />
         <div className="flex items-center gap-2 rounded-md border bg-background/85 px-3 py-1.5 text-xs font-medium backdrop-blur-sm">
           <span className="whitespace-nowrap">Carcass</span>
@@ -127,8 +137,30 @@ export function DrawerViewport() {
         </Button>
       </div>
 
-      <div className="pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-md border bg-background/85 px-3 py-1.5 text-xs text-muted-foreground whitespace-nowrap backdrop-blur-sm">
+      <div className="pointer-events-none absolute bottom-3 left-1/2 z-10 hidden -translate-x-1/2 rounded-md border bg-background/85 px-3 py-1.5 text-xs text-muted-foreground whitespace-nowrap backdrop-blur-sm sm:block">
         Left-drag rotate · Scroll zoom · Shift-drag pan
+      </div>
+
+      {/* Mobile panel launchers */}
+      <div className="absolute bottom-3 left-3 z-10 flex gap-2 sm:hidden">
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={onOpenDrawers}
+          aria-label="Open drawers"
+          title="Drawers"
+        >
+          <List className="size-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={onOpenSettings}
+          aria-label="Open settings"
+          title="Settings"
+        >
+          <Settings2 className="size-4" />
+        </Button>
       </div>
     </div>
   )

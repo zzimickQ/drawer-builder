@@ -2,13 +2,12 @@ import { useState } from 'react'
 import {
   ChevronLeft,
   ChevronRight,
-  ListChecks,
   PanelRightClose,
   RotateCcw,
   Settings2,
+  X,
 } from 'lucide-react'
 
-import { CutlistDialog } from '@/components/CutlistDialog'
 import { SettingsDialog } from '@/components/SettingsDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,7 +22,7 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { DEFAULT_CONFIG, clamp, type DrawerConfig } from '@/lib/drawer'
 import { UNIT_LABEL, formatMm, unitToMm } from '@/lib/units'
-import { useDrawerStore } from '@/store/useDrawerStore'
+import { useDrawerStore, selectSelectedConfig } from '@/store/useDrawerStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 
 function NumberField({
@@ -79,13 +78,17 @@ function NumberField({
   )
 }
 
-export function DrawerSidebar() {
-  const config = useDrawerStore((state) => state.config)
+interface DrawerSidebarProps {
+  /** When provided (mobile overlay mode), shows a close button */
+  onClose?: () => void
+}
+
+export function DrawerSidebar({ onClose }: DrawerSidebarProps) {
+  const config = useDrawerStore(selectSelectedConfig)
   const setConfig = useDrawerStore((state) => state.setConfig)
   const resetConfig = useDrawerStore((state) => state.resetConfig)
 
   const [collapsed, setCollapsed] = useState(false)
-  const [cutlistOpen, setCutlistOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
 
   if (collapsed) {
@@ -126,9 +129,20 @@ export function DrawerSidebar() {
             size="icon"
             onClick={() => setCollapsed(true)}
             aria-label="Collapse drawer settings"
+            className="hidden md:inline-flex"
           >
             <ChevronRight className="size-4" />
           </Button>
+          {onClose && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onClose}
+              aria-label="Close settings panel"
+            >
+              <X className="size-4" />
+            </Button>
+          )}
         </div>
       </header>
 
@@ -268,14 +282,6 @@ export function DrawerSidebar() {
 
       <footer className="flex flex-col gap-2 border-t p-4">
         <Button
-          variant="default"
-          className="w-full"
-          onClick={() => setCutlistOpen(true)}
-        >
-          <ListChecks className="size-4" />
-          View cutlist
-        </Button>
-        <Button
           variant="outline"
           className="w-full"
           onClick={resetConfig}
@@ -286,7 +292,6 @@ export function DrawerSidebar() {
         </Button>
       </footer>
 
-      <CutlistDialog open={cutlistOpen} onOpenChange={setCutlistOpen} />
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </aside>
   )
