@@ -25,7 +25,7 @@ import { UNIT_LABEL, formatMm, unitToMm } from '@/lib/units'
 import { useDrawerStore, selectSelectedConfig } from '@/store/useDrawerStore'
 import { useSettingsStore } from '@/store/useSettingsStore'
 
-function NumberField({
+export function NumberField({
   label,
   value,
   onChange,

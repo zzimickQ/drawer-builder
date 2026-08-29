@@ -1,6 +1,8 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 
 import { DEFAULT_CONFIG, type DrawerConfig } from '@/lib/drawer'
+import { useSettingsStore } from '@/store/useSettingsStore'
 
 export interface DrawerItem {
   id: string
@@ -34,66 +36,81 @@ export const selectSelectedConfig = (state: DrawerState): DrawerConfig =>
   state.drawers.find((drawer) => drawer.id === state.selectedId)?.config ??
   DEFAULT_CONFIG
 
-export const useDrawerStore = create<DrawerState>()((set) => ({
-  drawers: [{ id: 'd1', name: 'Drawer 1', config: DEFAULT_CONFIG }],
-  selectedId: 'd1',
-  nameCounter: 2,
-  carcassOpacity: 30,
+export const useDrawerStore = create<DrawerState>()(
+  persist(
+    (set) => ({
+      // The first drawer is created by the onboarding dialog on first launch.
+      drawers: [],
+      selectedId: '',
+      nameCounter: 1,
+      carcassOpacity: 30,
 
-  selectDrawer: (selectedId) => set({ selectedId }),
+      selectDrawer: (selectedId) => set({ selectedId }),
 
-  addDrawer: () =>
-    set((state) => {
-      const id = crypto.randomUUID()
-      return {
-        drawers: [
-          ...state.drawers,
-          {
-            id,
-            name: `Drawer ${state.nameCounter}`,
-            config: { ...DEFAULT_CONFIG },
-          },
-        ],
-        selectedId: id,
-        nameCounter: state.nameCounter + 1,
-      }
+      addDrawer: () =>
+        set((state) => {
+          const id = crypto.randomUUID()
+          const defaults = useSettingsStore.getState().drawerDefaults
+          return {
+            drawers: [
+              ...state.drawers,
+              {
+                id,
+                name: `Drawer ${state.nameCounter}`,
+                config: { ...DEFAULT_CONFIG, ...defaults },
+              },
+            ],
+            selectedId: id,
+            nameCounter: state.nameCounter + 1,
+          }
+        }),
+
+      removeDrawer: (id) =>
+        set((state) => {
+          if (state.drawers.length <= 1) return state
+          const drawers = state.drawers.filter((drawer) => drawer.id !== id)
+          return {
+            drawers,
+            selectedId:
+              state.selectedId === id ? drawers[0].id : state.selectedId,
+          }
+        }),
+
+      renameDrawer: (id, name) =>
+        set((state) => ({
+          drawers: state.drawers.map((drawer) =>
+            drawer.id === id ? { ...drawer, name } : drawer,
+          ),
+        })),
+
+      setConfig: (patch) =>
+        set((state) => ({
+          drawers: state.drawers.map((drawer) =>
+            drawer.id === state.selectedId
+              ? { ...drawer, config: { ...drawer.config, ...patch } }
+              : drawer,
+          ),
+        })),
+
+      resetConfig: () =>
+        set((state) => ({
+          drawers: state.drawers.map((drawer) =>
+            drawer.id === state.selectedId
+              ? { ...drawer, config: DEFAULT_CONFIG }
+              : drawer,
+          ),
+        })),
+
+      setCarcassOpacity: (carcassOpacity) => set({ carcassOpacity }),
     }),
-
-  removeDrawer: (id) =>
-    set((state) => {
-      if (state.drawers.length <= 1) return state
-      const drawers = state.drawers.filter((drawer) => drawer.id !== id)
-      return {
-        drawers,
-        selectedId:
-          state.selectedId === id ? drawers[0].id : state.selectedId,
-      }
-    }),
-
-  renameDrawer: (id, name) =>
-    set((state) => ({
-      drawers: state.drawers.map((drawer) =>
-        drawer.id === id ? { ...drawer, name } : drawer,
-      ),
-    })),
-
-  setConfig: (patch) =>
-    set((state) => ({
-      drawers: state.drawers.map((drawer) =>
-        drawer.id === state.selectedId
-          ? { ...drawer, config: { ...drawer.config, ...patch } }
-          : drawer,
-      ),
-    })),
-
-  resetConfig: () =>
-    set((state) => ({
-      drawers: state.drawers.map((drawer) =>
-        drawer.id === state.selectedId
-          ? { ...drawer, config: DEFAULT_CONFIG }
-          : drawer,
-      ),
-    })),
-
-  setCarcassOpacity: (carcassOpacity) => set({ carcassOpacity }),
-}))
+    {
+      name: 'drawer-builder-project',
+      partialize: (state) => ({
+        drawers: state.drawers,
+        selectedId: state.selectedId,
+        nameCounter: state.nameCounter,
+        carcassOpacity: state.carcassOpacity,
+      }),
+    },
+  ),
+)

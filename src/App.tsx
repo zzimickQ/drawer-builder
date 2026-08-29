@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { DrawerListPanel } from '@/components/DrawerListPanel'
 import { DrawerSidebar } from '@/components/DrawerSidebar'
 import { DrawerViewport } from '@/components/DrawerViewport'
+import { OnboardingDialog } from '@/components/OnboardingDialog'
 import { cn } from '@/lib/utils'
 
 type MobilePanel = 'drawers' | 'settings' | null
@@ -54,6 +55,9 @@ function App() {
           onClick={() => setMobilePanel(null)}
         />
       )}
+
+      {/* First-run defaults dialog */}
+      <OnboardingDialog />
     </div>
   )
 }

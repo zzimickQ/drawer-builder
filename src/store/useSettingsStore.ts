@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+import { DEFAULT_DEFAULTS, type DrawerDefaults } from '@/lib/drawer'
 import type { DisplayUnit } from '@/lib/units'
 
 export interface ViewportState {
@@ -17,10 +18,15 @@ interface SettingsState {
   viewport: ViewportState | null
   /** Incremented to request a viewport reset (not persisted) */
   viewportResetCount: number
+  /** Construction defaults applied to newly created drawers */
+  drawerDefaults: DrawerDefaults
+  /** Whether the first-run defaults dialog has been completed */
+  defaultsConfigured: boolean
 
   setDisplayUnit: (unit: DisplayUnit) => void
   setViewport: (viewport: ViewportState | null) => void
   requestViewportReset: () => void
+  saveDefaults: (defaults: DrawerDefaults) => void
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -29,11 +35,15 @@ export const useSettingsStore = create<SettingsState>()(
       displayUnit: 'mm',
       viewport: null,
       viewportResetCount: 0,
+      drawerDefaults: DEFAULT_DEFAULTS,
+      defaultsConfigured: false,
 
       setDisplayUnit: (displayUnit) => set({ displayUnit }),
       setViewport: (viewport) => set({ viewport }),
       requestViewportReset: () =>
         set((state) => ({ viewportResetCount: state.viewportResetCount + 1 })),
+      saveDefaults: (drawerDefaults) =>
+        set({ drawerDefaults, defaultsConfigured: true }),
     }),
     {
       name: 'drawer-builder-settings',
@@ -41,6 +51,8 @@ export const useSettingsStore = create<SettingsState>()(
       partialize: (state) => ({
         displayUnit: state.displayUnit,
         viewport: state.viewport,
+        drawerDefaults: state.drawerDefaults,
+        defaultsConfigured: state.defaultsConfigured,
       }),
     },
   ),

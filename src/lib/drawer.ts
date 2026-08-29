@@ -41,6 +41,27 @@ export const DEFAULT_CONFIG: DrawerConfig = {
   pullOut: 0,
 }
 
+/**
+ * Construction defaults configured once on first launch and applied to
+ * every newly created drawer.
+ */
+export type DrawerDefaults = Pick<
+  DrawerConfig,
+  | 'slideThickness'
+  | 'boxThickness'
+  | 'bottomThickness'
+  | 'faceType'
+  | 'faceThickness'
+>
+
+export const DEFAULT_DEFAULTS: DrawerDefaults = {
+  slideThickness: 13,
+  boxThickness: 18,
+  bottomThickness: 6,
+  faceType: 'outset',
+  faceThickness: 18,
+}
+
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
 }
