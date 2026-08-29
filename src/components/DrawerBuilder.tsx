@@ -18,6 +18,11 @@ interface DrawerBuilderProps {
  */
 export function DrawerBuilder({ onOpenCutlist }: DrawerBuilderProps) {
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>(null)
+  const [settingsCollapsed, setSettingsCollapsed] = useState(false)
+
+  // The settings sidebar is expanded on desktop unless collapsed to the rail;
+  // the mobile slide-in overlay always opens expanded.
+  const settingsExpanded = mobilePanel === 'settings' || !settingsCollapsed
 
   return (
     <div className="relative flex h-full w-full overflow-hidden">
@@ -39,18 +44,24 @@ export function DrawerBuilder({ onOpenCutlist }: DrawerBuilderProps) {
       <main className="relative min-w-0 flex-1">
         <DrawerViewport
           onOpenDrawers={() => setMobilePanel('drawers')}
-          onOpenSettings={() => setMobilePanel('settings')}
+          onOpenSettings={() => {
+            setSettingsCollapsed(false)
+            setMobilePanel('settings')
+          }}
         />
       </main>
 
       {/* Settings sidebar — inline on md+, slides in from the right on mobile */}
       <div
         className={cn(
-          'absolute inset-y-0 right-0 z-40 w-80 max-w-[85vw] transition-transform duration-200 md:static md:z-auto md:translate-x-0',
+          'absolute inset-y-0 right-0 z-40 max-w-[85vw] transition-transform duration-200 md:static md:z-auto md:translate-x-0',
+          settingsExpanded ? 'w-80' : 'w-11',
           mobilePanel === 'settings' ? 'translate-x-0' : 'translate-x-full',
         )}
       >
         <DrawerSidebar
+          collapsed={settingsCollapsed}
+          onCollapsedChange={setSettingsCollapsed}
           onClose={
             mobilePanel === 'settings' ? () => setMobilePanel(null) : undefined
           }

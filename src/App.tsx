@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Box, Scissors } from 'lucide-react'
 
 import { CutlistTab } from '@/components/CutlistTab'
@@ -10,21 +10,20 @@ type View = 'design' | 'cutlist'
 
 function TabButton({
   active,
-  onClick,
+  to,
   icon,
   label,
 }: {
   active: boolean
-  onClick: () => void
+  to: string
   icon: React.ReactNode
   label: string
 }) {
   return (
-    <button
-      type="button"
+    <Link
+      to={to}
       role="tab"
       aria-selected={active}
-      onClick={onClick}
       className={cn(
         'relative flex h-11 items-center gap-1.5 px-3 text-sm font-medium transition-colors outline-none sm:px-4',
         'focus-visible:bg-muted',
@@ -36,12 +35,16 @@ function TabButton({
       {active && (
         <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-primary" />
       )}
-    </button>
+    </Link>
   )
 }
 
 function App() {
-  const [view, setView] = useState<View>('design')
+  const location = useLocation()
+  const navigate = useNavigate()
+  // The active tool is derived from the URL: #/cutlist → cutlist, anything
+  // else (including #/ and the bare hash) → the drawer builder.
+  const view: View = location.pathname === '/cutlist' ? 'cutlist' : 'design'
 
   return (
     <div className="flex h-svh w-full flex-col overflow-hidden bg-background">
@@ -53,13 +56,13 @@ function App() {
       >
         <TabButton
           active={view === 'design'}
-          onClick={() => setView('design')}
+          to="/"
           icon={<Box className="size-4" />}
           label="Drawer Builder"
         />
         <TabButton
           active={view === 'cutlist'}
-          onClick={() => setView('cutlist')}
+          to="/cutlist"
           icon={<Scissors className="size-4" />}
           label="Cutlist"
         />
@@ -67,7 +70,7 @@ function App() {
 
       <div className="min-h-0 flex-1">
         {view === 'design' ? (
-          <DrawerBuilder onOpenCutlist={() => setView('cutlist')} />
+          <DrawerBuilder onOpenCutlist={() => navigate('/cutlist')} />
         ) : (
           <CutlistTab />
         )}

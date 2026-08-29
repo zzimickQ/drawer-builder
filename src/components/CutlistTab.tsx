@@ -8,7 +8,9 @@ import {
   Package,
   Plus,
   RefreshCw,
+  RotateCw,
   Scissors,
+  Settings2,
   Table2,
   Trash2,
   TriangleAlert,
@@ -16,6 +18,7 @@ import {
 
 import { CutSequenceTable } from '@/components/cutlist/CutSequenceTable'
 import { SheetDiagram } from '@/components/cutlist/SheetDiagram'
+import { SettingsDialog } from '@/components/SettingsDialog'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -38,6 +41,14 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { type OptimizationResult } from '@/lib/cutlist/optimizer'
 import { cutsToCsv, formatArea, planToText } from '@/lib/cutlist/format'
 import {
@@ -54,7 +65,12 @@ import {
   type PartSpec,
   type StockSpec,
 } from '@/lib/cutlist/types'
-import { UNIT_LABEL, formatMm, unitToMm } from '@/lib/units'
+import {
+  UNIT_LABEL,
+  formatMm,
+  type DisplayUnit,
+  unitToMm,
+} from '@/lib/units'
 import { cn } from '@/lib/utils'
 import { useCutlistStore } from '@/store/useCutlistStore'
 import { useDrawerStore } from '@/store/useDrawerStore'
@@ -66,6 +82,15 @@ const QUALITY_PRESETS: { label: string; budget: number }[] = [
   { label: 'Thorough', budget: 7000 },
 ]
 
+/**
+ * Input styling for fields inside the parts/stock tables: no boxed border or
+ * rounding, so the table's own row/column borders provide the grid lines;
+ * focus shows the same muted highlight as the row hover. Invalid drafts
+ * still turn red via aria-invalid.
+ */
+const TABLE_CELL_INPUT =
+  'h-7 min-w-0 rounded-none border-transparent bg-transparent px-1.5 text-xs md:text-xs focus-visible:border-transparent focus-visible:bg-muted/60 focus-visible:ring-0'
+
 export function CutlistTab() {
   const drawers = useDrawerStore((state) => state.drawers)
   const displayUnit = useSettingsStore((state) => state.displayUnit)
@@ -75,12 +100,17 @@ export function CutlistTab() {
   const options = useCutlistStore((s) => s.options)
   const result = useCutlistStore((s) => s.result)
   const calculated = useCutlistStore((s) => s.calculated)
+  const showLabels = useCutlistStore((s) => s.showLabels)
+  const showMaterials = useCutlistStore((s) => s.showMaterials)
   const setParts = useCutlistStore((s) => s.setParts)
   const setStocks = useCutlistStore((s) => s.setStocks)
   const patchOptions = useCutlistStore((s) => s.patchOptions)
+  const setShowLabels = useCutlistStore((s) => s.setShowLabels)
+  const setShowMaterials = useCutlistStore((s) => s.setShowMaterials)
   const [calculating, setCalculating] = useState(false)
   const [stale, setStale] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   // First visit: import every drawer's boards automatically. On later visits
   // (persisted store) restore the last plan if one was calculated.
@@ -209,6 +239,15 @@ export function CutlistTab() {
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
+              size="icon"
+              onClick={() => setSettingsOpen(true)}
+              aria-label="Open settings"
+              title="Settings"
+            >
+              <Settings2 className="size-4" />
+            </Button>
+            <Button
+              variant="outline"
               onClick={handleCopy}
               disabled={!result}
               title="Copy the full plan as text"
@@ -250,6 +289,8 @@ export function CutlistTab() {
               parts={parts}
               drawers={drawers}
               unit={displayUnit}
+              showLabels={showLabels}
+              showMaterials={showMaterials}
               onUpdate={updatePart}
               onRemove={(id) => setParts((l) => l.filter((p) => p.id !== id))}
               onAdd={addPart}
@@ -278,6 +319,8 @@ export function CutlistTab() {
             <StockCard
               stocks={stocks}
               unit={displayUnit}
+              showLabels={showLabels}
+              showMaterials={showMaterials}
               onUpdate={updateStock}
               onRemove={(id) => setStocks((l) => l.filter((s) => s.id !== id))}
               onAdd={addStock}
@@ -285,8 +328,13 @@ export function CutlistTab() {
 
             <OptionsCard
               options={options}
+              unit={displayUnit}
+              showLabels={showLabels}
+              showMaterials={showMaterials}
               onPatch={patchOptions}
               onQuality={(budget) => patchOptions({ timeBudgetMs: budget })}
+              onShowLabelsChange={setShowLabels}
+              onShowMaterialsChange={setShowMaterials}
             />
           </div>
 
@@ -310,7 +358,77 @@ export function CutlistTab() {
           </div>
         </div>
       </div>
+
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </div>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Numeric cell (draft input)                                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Text input for numeric values. Keeps a local draft so the user can type
+ * anything (empty, zero, decimals, …) without the field snapping back;
+ * the committed value only updates once the draft parses to a valid
+ * number. Invalid drafts are flagged red via aria-invalid.
+ */
+function DraftNumberInput({
+  value,
+  unit,
+  integer = false,
+  onCommit,
+  className,
+  ariaLabel,
+}: {
+  /** Committed value — mm for dimensions, plain count for quantities. */
+  value: number
+  /** Display unit for dimensions; omit for plain counts. */
+  unit?: DisplayUnit
+  /** Require a positive integer (quantities) instead of any positive number. */
+  integer?: boolean
+  /** Called with the committed value (converted back to mm when unit is set). */
+  onCommit: (v: number) => void
+  className?: string
+  ariaLabel?: string
+}) {
+  const [draft, setDraft] = useState<string | null>(null)
+
+  const text = draft ?? (unit ? formatMm(value, unit) : String(value))
+  const parsed = parseFloat(text)
+  const valid =
+    Number.isFinite(parsed) &&
+    parsed > 0 &&
+    (!integer || Number.isInteger(parsed))
+
+  return (
+    <Input
+      type="text"
+      inputMode={integer ? 'numeric' : 'decimal'}
+      value={text}
+      aria-label={ariaLabel}
+      aria-invalid={valid ? undefined : true}
+      className={cn(
+        TABLE_CELL_INPUT,
+        'text-right tabular-nums',
+        !valid && 'text-destructive',
+        className,
+      )}
+      onChange={(e) => {
+        const next = e.target.value
+        setDraft(next)
+        const v = parseFloat(next)
+        if (
+          Number.isFinite(v) &&
+          v > 0 &&
+          (!integer || Number.isInteger(v))
+        ) {
+          onCommit(unit ? unitToMm(v, unit) : v)
+        }
+      }}
+      onBlur={() => setDraft(null)}
+    />
   )
 }
 
@@ -322,6 +440,8 @@ function PartsCard({
   parts,
   drawers,
   unit,
+  showLabels,
+  showMaterials,
   onUpdate,
   onRemove,
   onAdd,
@@ -330,6 +450,8 @@ function PartsCard({
   parts: PartSpec[]
   drawers: { id: string; name: string }[]
   unit: 'mm' | 'cm' | 'in'
+  showLabels: boolean
+  showMaterials: boolean
   onUpdate: (id: string, patch: Partial<PartSpec>) => void
   onRemove: (id: string) => void
   onAdd: () => void
@@ -355,88 +477,112 @@ function PartsCard({
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
-        {parts.length === 0 && (
+        {parts.length === 0 ? (
           <p className="text-xs text-muted-foreground">
             No parts yet — import from your drawers or add rows manually.
           </p>
-        )}
-        {parts.map((part) => (
-          <div
-            key={part.id}
-            className="grid grid-cols-[minmax(0,1.6fr)_repeat(2,minmax(0,0.7fr))_minmax(0,0.55fr)_minmax(0,1fr)_auto_auto] items-center gap-1.5"
-          >
-            <Input
-              value={part.label}
-              onChange={(e) => onUpdate(part.id, { label: e.target.value })}
-              className="h-7 px-1.5 text-xs"
-              aria-label="Part label"
-            />
-            <Input
-              type="number"
-              inputMode="decimal"
-              min={1}
-              value={formatMm(part.width, unit)}
-              onChange={(e) => {
-                const v = parseFloat(e.target.value)
-                if (!Number.isNaN(v) && v > 0) onUpdate(part.id, { width: unitToMm(v, unit) })
-              }}
-              className="h-7 px-1.5 text-right text-xs tabular-nums"
-              aria-label="Part width"
-            />
-            <Input
-              type="number"
-              inputMode="decimal"
-              min={1}
-              value={formatMm(part.height, unit)}
-              onChange={(e) => {
-                const v = parseFloat(e.target.value)
-                if (!Number.isNaN(v) && v > 0) onUpdate(part.id, { height: unitToMm(v, unit) })
-              }}
-              className="h-7 px-1.5 text-right text-xs tabular-nums"
-              aria-label="Part height"
-            />
-            <Input
-              type="number"
-              inputMode="numeric"
-              min={1}
-              value={String(part.qty)}
-              onChange={(e) => {
-                const v = parseInt(e.target.value, 10)
-                if (!Number.isNaN(v) && v > 0) onUpdate(part.id, { qty: v })
-              }}
-              className="h-7 px-1.5 text-right text-xs tabular-nums"
-              aria-label="Part quantity"
-            />
-            <Input
-              value={part.material ?? ''}
-              onChange={(e) => onUpdate(part.id, { material: e.target.value || undefined })}
-              className="h-7 px-1.5 text-xs"
-              placeholder="Material"
-              aria-label="Part material"
-            />
-            <Checkbox
-              checked={part.canRotate}
-              onCheckedChange={(checked) =>
-                onUpdate(part.id, { canRotate: checked === true })
-              }
-              aria-label="Allow rotation"
-              title="Allow 90° rotation"
-            />
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => onRemove(part.id)}
-              aria-label={`Remove ${part.label}`}
-            >
-              <Trash2 className="size-3.5" />
-            </Button>
-          </div>
-        ))}
-        {parts.length > 0 && (
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            Width × height × qty × material · the checkbox allows 90° rotation
-            during nesting.
-          </p>
+        ) : (
+          <>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  {showLabels && (
+                    <TableHead className="w-[28%]">Label</TableHead>
+                  )}
+                  <TableHead className="w-[13%] text-right">Width</TableHead>
+                  <TableHead className="w-[13%] text-right">Height</TableHead>
+                  <TableHead className="w-[10%] text-right">Qty</TableHead>
+                  {showMaterials && (
+                    <TableHead className="w-[18%]">Material</TableHead>
+                  )}
+                  <TableHead
+                    className="w-9 text-center"
+                    title="Allow 90° rotation"
+                  >
+                    <RotateCw className="mx-auto size-3.5" aria-hidden />
+                    <span className="sr-only">Allow rotation</span>
+                  </TableHead>
+                  <TableHead className="w-9" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {parts.map((part) => (
+                  <TableRow key={part.id}>
+                    {showLabels && (
+                      <TableCell className="py-1 pr-1">
+                        <Input
+                          value={part.label}
+                          onChange={(e) => onUpdate(part.id, { label: e.target.value })}
+                          className={TABLE_CELL_INPUT}
+                          aria-label="Part label"
+                        />
+                      </TableCell>
+                    )}
+                    <TableCell className="py-1 pr-1">
+                      <DraftNumberInput
+                        unit={unit}
+                        value={part.width}
+                        onCommit={(v) => onUpdate(part.id, { width: v })}
+                        ariaLabel="Part width"
+                      />
+                    </TableCell>
+                    <TableCell className="py-1 pr-1">
+                      <DraftNumberInput
+                        unit={unit}
+                        value={part.height}
+                        onCommit={(v) => onUpdate(part.id, { height: v })}
+                        ariaLabel="Part height"
+                      />
+                    </TableCell>
+                    <TableCell className="py-1 pr-1">
+                      <DraftNumberInput
+                        integer
+                        value={part.qty}
+                        onCommit={(v) => onUpdate(part.id, { qty: v })}
+                        ariaLabel="Part quantity"
+                      />
+                    </TableCell>
+                    {showMaterials && (
+                      <TableCell className="py-1 pr-1">
+                        <Input
+                          value={part.material ?? ''}
+                          onChange={(e) =>
+                            onUpdate(part.id, { material: e.target.value || undefined })
+                          }
+                          className={TABLE_CELL_INPUT}
+                          placeholder="Material"
+                          aria-label="Part material"
+                        />
+                      </TableCell>
+                    )}
+                    <TableCell className="py-1 text-center">
+                      <Checkbox
+                        checked={part.canRotate}
+                        onCheckedChange={(checked) =>
+                          onUpdate(part.id, { canRotate: checked === true })
+                        }
+                        aria-label="Allow rotation"
+                        title="Allow 90° rotation"
+                      />
+                    </TableCell>
+                    <TableCell className="py-1 text-right">
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={() => onRemove(part.id)}
+                        aria-label={`Remove ${part.label}`}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              {['Width', 'height', 'qty', ...(showMaterials ? ['material'] : [])].join(' × ')} · the checkbox allows 90° rotation during nesting.
+            </p>
+          </>
         )}
       </CardContent>
     </Card>
@@ -532,12 +678,16 @@ function ImportPopover({
 function StockCard({
   stocks,
   unit,
+  showLabels,
+  showMaterials,
   onUpdate,
   onRemove,
   onAdd,
 }: {
   stocks: StockSpec[]
   unit: 'mm' | 'cm' | 'in'
+  showLabels: boolean
+  showMaterials: boolean
   onUpdate: (id: string, patch: Partial<StockSpec>) => void
   onRemove: (id: string) => void
   onAdd: (preset?: (typeof STOCK_PRESETS)[number]) => void
@@ -571,75 +721,89 @@ function StockCard({
             </button>
           ))}
         </div>
-        {stocks.length === 0 && (
+        {stocks.length === 0 ? (
           <p className="text-xs text-muted-foreground">
             No stock panels — add a sheet format to optimize against.
           </p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                {showLabels && (
+                  <TableHead className="w-[32%]">Label</TableHead>
+                )}
+                <TableHead className="w-[15%] text-right">Width</TableHead>
+                <TableHead className="w-[15%] text-right">Height</TableHead>
+                <TableHead className="w-[12%] text-right">Qty</TableHead>
+                {showMaterials && (
+                  <TableHead className="w-[20%]">Material</TableHead>
+                )}
+                <TableHead className="w-9" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {stocks.map((stock) => (
+                <TableRow key={stock.id}>
+                  {showLabels && (
+                    <TableCell className="py-1 pr-1">
+                      <Input
+                        value={stock.label}
+                        onChange={(e) => onUpdate(stock.id, { label: e.target.value })}
+                        className={TABLE_CELL_INPUT}
+                        aria-label="Stock label"
+                      />
+                    </TableCell>
+                  )}
+                  <TableCell className="py-1 pr-1">
+                    <DraftNumberInput
+                      unit={unit}
+                      value={stock.width}
+                      onCommit={(v) => onUpdate(stock.id, { width: v })}
+                      ariaLabel="Stock width"
+                    />
+                  </TableCell>
+                  <TableCell className="py-1 pr-1">
+                    <DraftNumberInput
+                      unit={unit}
+                      value={stock.height}
+                      onCommit={(v) => onUpdate(stock.id, { height: v })}
+                      ariaLabel="Stock height"
+                    />
+                  </TableCell>
+                  <TableCell className="py-1 pr-1">
+                    <DraftNumberInput
+                      integer
+                      value={stock.qty}
+                      onCommit={(v) => onUpdate(stock.id, { qty: v })}
+                      ariaLabel="Stock quantity"
+                    />
+                  </TableCell>
+                  {showMaterials && (
+                    <TableCell className="py-1 pr-1">
+                      <Input
+                        value={stock.material ?? ''}
+                        onChange={(e) => onUpdate(stock.id, { material: e.target.value || undefined })}
+                        className={TABLE_CELL_INPUT}
+                        placeholder="Material"
+                        aria-label="Stock material"
+                      />
+                    </TableCell>
+                  )}
+                  <TableCell className="py-1 text-right">
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => onRemove(stock.id)}
+                      aria-label={`Remove ${stock.label}`}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
-        {stocks.map((stock) => (
-          <div
-            key={stock.id}
-            className="grid grid-cols-[minmax(0,1fr)_repeat(2,minmax(0,0.7fr))_minmax(0,0.55fr)_minmax(0,1fr)_auto] items-center gap-1.5"
-          >
-            <Input
-              value={stock.label}
-              onChange={(e) => onUpdate(stock.id, { label: e.target.value })}
-              className="h-7 px-1.5 text-xs"
-              aria-label="Stock label"
-            />
-            <Input
-              type="number"
-              inputMode="decimal"
-              min={1}
-              value={formatMm(stock.width, unit)}
-              onChange={(e) => {
-                const v = parseFloat(e.target.value)
-                if (!Number.isNaN(v) && v > 0) onUpdate(stock.id, { width: unitToMm(v, unit) })
-              }}
-              className="h-7 px-1.5 text-right text-xs tabular-nums"
-              aria-label="Stock width"
-            />
-            <Input
-              type="number"
-              inputMode="decimal"
-              min={1}
-              value={formatMm(stock.height, unit)}
-              onChange={(e) => {
-                const v = parseFloat(e.target.value)
-                if (!Number.isNaN(v) && v > 0) onUpdate(stock.id, { height: unitToMm(v, unit) })
-              }}
-              className="h-7 px-1.5 text-right text-xs tabular-nums"
-              aria-label="Stock height"
-            />
-            <Input
-              type="number"
-              inputMode="numeric"
-              min={1}
-              value={String(stock.qty)}
-              onChange={(e) => {
-                const v = parseInt(e.target.value, 10)
-                if (!Number.isNaN(v) && v > 0) onUpdate(stock.id, { qty: v })
-              }}
-              className="h-7 px-1.5 text-right text-xs tabular-nums"
-              aria-label="Stock quantity"
-            />
-            <Input
-              value={stock.material ?? ''}
-              onChange={(e) => onUpdate(stock.id, { material: e.target.value || undefined })}
-              className="h-7 px-1.5 text-xs"
-              placeholder="Material"
-              aria-label="Stock material"
-            />
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => onRemove(stock.id)}
-              aria-label={`Remove ${stock.label}`}
-            >
-              <Trash2 className="size-3.5" />
-            </Button>
-          </div>
-        ))}
       </CardContent>
     </Card>
   )
@@ -651,12 +815,22 @@ function StockCard({
 
 function OptionsCard({
   options,
+  unit,
+  showLabels,
+  showMaterials,
   onPatch,
   onQuality,
+  onShowLabelsChange,
+  onShowMaterialsChange,
 }: {
   options: OptimizationOptions
+  unit: DisplayUnit
+  showLabels: boolean
+  showMaterials: boolean
   onPatch: (patch: Partial<OptimizationOptions>) => void
   onQuality: (budget: number) => void
+  onShowLabelsChange: (show: boolean) => void
+  onShowMaterialsChange: (show: boolean) => void
 }) {
   return (
     <Card>
@@ -676,17 +850,17 @@ function OptionsCard({
               type="number"
               inputMode="decimal"
               min={0}
-              step={0.5}
-              value={formatMm(options.kerf, 'mm')}
+              step={unit === 'in' ? 0.02 : unit === 'cm' ? 0.05 : 0.5}
+              value={formatMm(options.kerf, unit)}
               onChange={(e) => {
                 const v = parseFloat(e.target.value)
-                if (!Number.isNaN(v) && v >= 0) onPatch({ kerf: v })
+                if (!Number.isNaN(v) && v >= 0) onPatch({ kerf: unitToMm(v, unit) })
               }}
               className="h-7 pr-8 text-right text-xs tabular-nums"
               aria-label="Kerf"
             />
             <span className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-[10px] text-muted-foreground">
-              mm
+              {UNIT_LABEL[unit]}
             </span>
           </div>
         </div>
@@ -723,6 +897,30 @@ function OptionsCard({
             checked={options.forceOneSheet}
             onCheckedChange={(c) => onPatch({ forceOneSheet: c === true })}
             aria-label="Use only one sheet"
+          />
+        </OptionRow>
+
+        <Separator />
+
+        <OptionRow
+          label="Show labels"
+          hint="Show the label column in the parts and stock tables"
+        >
+          <Checkbox
+            checked={showLabels}
+            onCheckedChange={(c) => onShowLabelsChange(c === true)}
+            aria-label="Show labels"
+          />
+        </OptionRow>
+
+        <OptionRow
+          label="Show materials"
+          hint="Show the material column in the parts and stock tables"
+        >
+          <Checkbox
+            checked={showMaterials}
+            onCheckedChange={(c) => onShowMaterialsChange(c === true)}
+            aria-label="Show materials"
           />
         </OptionRow>
 
@@ -881,7 +1079,7 @@ function Results({ result, unit }: { result: OptimizationResult; unit: 'mm' | 'c
             ))}
           </div>
           <p className="text-[11px] text-muted-foreground">
-            Kerf {formatMm(result.options.kerf, 'mm')} mm ·{' '}
+            Kerf {formatMm(result.options.kerf, unit)} {UNIT_LABEL[unit]} ·{' '}
             {PRIORITY_LABEL[result.options.priority]} · waste includes kerf dust
             · optimized in {(result.elapsedMs / 1000).toFixed(1)} s
           </p>

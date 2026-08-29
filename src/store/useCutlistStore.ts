@@ -27,6 +27,10 @@ interface CutlistState {
   /** Available stock sheet formats. */
   stocks: StockSpec[]
   options: OptimizationOptions
+  /** Hide the label column in the parts/stock tables. */
+  showLabels: boolean
+  /** Hide the material column in the parts/stock tables. */
+  showMaterials: boolean
   /** Last optimization plan (never persisted — recomputed on demand). */
   result: OptimizationResult | null
   /** Whether a plan has been produced; restores the plan on reload. */
@@ -37,6 +41,8 @@ interface CutlistState {
   setParts: (updater: ListUpdater<PartSpec>) => void
   setStocks: (updater: ListUpdater<StockSpec>) => void
   patchOptions: (patch: Partial<OptimizationOptions>) => void
+  setShowLabels: (show: boolean) => void
+  setShowMaterials: (show: boolean) => void
   setResult: (result: OptimizationResult | null) => void
   /** First-time only: import every drawer's boards as parts. */
   bootstrap: () => void
@@ -50,6 +56,8 @@ export const useCutlistStore = create<CutlistState>()(
       parts: [],
       stocks: defaultStocks(),
       options: { ...DEFAULT_OPTIONS },
+      showLabels: true,
+      showMaterials: true,
       result: null,
       calculated: false,
       initialized: false,
@@ -59,6 +67,8 @@ export const useCutlistStore = create<CutlistState>()(
         set((s) => ({ stocks: applyUpdater(updater, s.stocks) })),
       patchOptions: (patch) =>
         set((s) => ({ options: { ...s.options, ...patch } })),
+      setShowLabels: (show) => set({ showLabels: show }),
+      setShowMaterials: (show) => set({ showMaterials: show }),
       setResult: (result) => set({ result, calculated: result !== null }),
 
       bootstrap: () => {
@@ -84,6 +94,8 @@ export const useCutlistStore = create<CutlistState>()(
         parts: state.parts,
         stocks: state.stocks,
         options: state.options,
+        showLabels: state.showLabels,
+        showMaterials: state.showMaterials,
         calculated: state.calculated,
         initialized: state.initialized,
       }),

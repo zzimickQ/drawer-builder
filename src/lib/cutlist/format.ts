@@ -4,7 +4,7 @@ import {
   PRIORITY_LABEL,
   type OptimizationOptions,
 } from '@/lib/cutlist/types'
-import { formatMm, type DisplayUnit } from '@/lib/units'
+import { UNIT_LABEL, formatMm, type DisplayUnit } from '@/lib/units'
 
 /** Formats an area (mm²) in the display unit. */
 export function formatArea(mm2: number, unit: DisplayUnit): string {
@@ -17,9 +17,9 @@ export function formatArea(mm2: number, unit: DisplayUnit): string {
   return `${mm2.toLocaleString(undefined, { maximumFractionDigits: 0 })} mm²`
 }
 
-function optionsLine(options: OptimizationOptions): string[] {
+function optionsLine(options: OptimizationOptions, unit: DisplayUnit): string[] {
   return [
-    `Cut thickness (kerf): ${formatMm(options.kerf, 'mm')} mm`,
+    `Cut thickness (kerf): ${formatMm(options.kerf, unit)} ${UNIT_LABEL[unit]}`,
     `Optimization priority: ${PRIORITY_LABEL[options.priority]}`,
     `Preferred cut direction: ${CUT_DIRECTION_LABEL[options.preferredCutDirection]}`,
     `Rotation allowed: ${options.canRotate ? 'yes' : 'no'}`,
@@ -34,7 +34,7 @@ export function planToText(result: OptimizationResult, unit: DisplayUnit): strin
   lines.push('Cutlist optimizer — plan')
   lines.push('')
   lines.push('Settings')
-  lines.push(...optionsLine(result.options))
+  lines.push(...optionsLine(result.options, unit))
   lines.push('')
   lines.push('Statistics')
   lines.push(

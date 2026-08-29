@@ -81,23 +81,30 @@ export function NumberField({
 interface DrawerSidebarProps {
   /** When provided (mobile overlay mode), shows a close button */
   onClose?: () => void
+  /** Collapsed to the expand rail; controlled by the parent so the layout width can follow. */
+  collapsed?: boolean
+  /** Called when the user toggles between the full sidebar and the expand rail. */
+  onCollapsedChange?: (collapsed: boolean) => void
 }
 
-export function DrawerSidebar({ onClose }: DrawerSidebarProps) {
+export function DrawerSidebar({
+  onClose,
+  collapsed = false,
+  onCollapsedChange,
+}: DrawerSidebarProps) {
   const config = useDrawerStore(selectSelectedConfig)
   const setConfig = useDrawerStore((state) => state.setConfig)
   const resetConfig = useDrawerStore((state) => state.resetConfig)
 
-  const [collapsed, setCollapsed] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
 
   if (collapsed) {
     return (
-      <aside className="flex h-full w-11 shrink-0 items-start justify-center border-l bg-card pt-3">
+      <aside className="flex h-full w-full shrink-0 items-start justify-center border-l bg-card pt-3">
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => setCollapsed(false)}
+          onClick={() => onCollapsedChange?.(false)}
           aria-label="Expand drawer settings"
         >
           <ChevronLeft className="size-4" />
@@ -127,7 +134,7 @@ export function DrawerSidebar({ onClose }: DrawerSidebarProps) {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setCollapsed(true)}
+            onClick={() => onCollapsedChange?.(true)}
             aria-label="Collapse drawer settings"
             className="hidden md:inline-flex"
           >

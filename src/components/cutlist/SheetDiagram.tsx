@@ -53,7 +53,6 @@ function collectKerf(node: CutNode, out: KerfLine[]): void {
 }
 
 const VIEW_W = 620
-const VIEW_H = 430
 const MARGIN = 34
 
 interface SheetDiagramProps {
@@ -64,17 +63,19 @@ interface SheetDiagramProps {
 /**
  * Scaled SVG of one stock-sheet layout. Parts are tinted by label, waste is
  * hatched, kerf lines are drawn in red, and the sheet's outer dimensions are
- * annotated along the edges.
+ * annotated along the edges. Each part shows its width along the top edge and
+ * its height along the left edge (inset), with the label centered inside.
  */
 export function SheetDiagram({ mosaic, unit }: SheetDiagramProps) {
   // All layouts inside a mosaic are identical; use the first copy.
   const layout = mosaic.layouts[0]
   const { w: sheetW, h: sheetH, root, parts } = layout
 
-  const scale = Math.min(
-    (VIEW_W - MARGIN * 2) / sheetW,
-    (VIEW_H - MARGIN * 2) / sheetH,
-  )
+  // Scale the sheet to span the full viewBox width; the viewBox height
+  // follows the sheet's aspect ratio, so the diagram fills the container
+  // as much as possible regardless of the sheet proportions.
+  const scale = (VIEW_W - MARGIN * 2) / sheetW
+  const VIEW_H = sheetH * scale + MARGIN * 2
   const ox = (VIEW_W - sheetW * scale) / 2
   const oy = (VIEW_H - sheetH * scale) / 2
   const px = (v: number) => ox + v * scale
@@ -93,7 +94,7 @@ export function SheetDiagram({ mosaic, unit }: SheetDiagramProps) {
   return (
     <svg
       viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-      className="h-auto w-full max-w-[620px]"
+      className="h-auto w-full"
       role="img"
       aria-label={`Cut layout for ${sheetW} × ${sheetH} sheet`}
     >
@@ -165,8 +166,12 @@ export function SheetDiagram({ mosaic, unit }: SheetDiagramProps) {
         const ph = p.h * scale
         const cx = px(p.x) + pw / 2
         const cy = py(p.y) + ph / 2
+        // The label sits centered inside the part; the width/height readouts
+        // sit on the top and left edges, inset from the part outline.
         const showLabel = pw > 46 && ph > 30
-        const showDims = pw > 30 && ph > 18
+        const showW = pw > 36 && ph > 46
+        const showH = ph > 36 && pw > 48
+        const inset = 9
         return (
           <g key={i}>
             <rect
@@ -179,27 +184,39 @@ export function SheetDiagram({ mosaic, unit }: SheetDiagramProps) {
               stroke={color}
               strokeWidth={1.4}
             />
+            {showW && (
+              <text
+                x={cx}
+                y={py(p.y) + inset}
+                textAnchor="middle"
+                fontSize={9}
+                fill="var(--muted-foreground)"
+              >
+                {formatMm(p.w, unit)}
+              </text>
+            )}
+            {showH && (
+              <text
+                x={px(p.x) + inset}
+                y={cy}
+                textAnchor="middle"
+                fontSize={9}
+                fill="var(--muted-foreground)"
+                transform={`rotate(-90 ${px(p.x) + inset} ${cy})`}
+              >
+                {formatMm(p.h, unit)}
+              </text>
+            )}
             {showLabel && (
               <text
                 x={cx}
-                y={cy - (showDims ? 2 : 0)}
+                y={cy + 4}
                 textAnchor="middle"
                 fontSize={11}
                 fontWeight={600}
                 fill="var(--foreground)"
               >
                 {p.item.spec.label}
-              </text>
-            )}
-            {showDims && (
-              <text
-                x={cx}
-                y={cy + (showLabel ? 13 : 4)}
-                textAnchor="middle"
-                fontSize={10}
-                fill="var(--muted-foreground)"
-              >
-                {formatMm(p.w, unit)} × {formatMm(p.h, unit)}
               </text>
             )}
           </g>
