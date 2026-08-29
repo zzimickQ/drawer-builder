@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { ListChecks, Plus, Trash2, X } from 'lucide-react'
 
-import { CutlistDialog } from '@/components/CutlistDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { UNIT_LABEL, formatMm } from '@/lib/units'
@@ -12,9 +11,11 @@ import { useSettingsStore } from '@/store/useSettingsStore'
 interface DrawerListPanelProps {
   /** When provided (mobile overlay mode), shows a close button */
   onClose?: () => void
+  /** Switches the main area to the cutlist optimization tab */
+  onOpenCutlist?: () => void
 }
 
-export function DrawerListPanel({ onClose }: DrawerListPanelProps) {
+export function DrawerListPanel({ onClose, onOpenCutlist }: DrawerListPanelProps) {
   const drawers = useDrawerStore((state) => state.drawers)
   const selectedId = useDrawerStore((state) => state.selectedId)
   const selectDrawer = useDrawerStore((state) => state.selectDrawer)
@@ -23,7 +24,6 @@ export function DrawerListPanel({ onClose }: DrawerListPanelProps) {
   const renameDrawer = useDrawerStore((state) => state.renameDrawer)
   const displayUnit = useSettingsStore((state) => state.displayUnit)
 
-  const [cutlistOpen, setCutlistOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [nameDraft, setNameDraft] = useState('')
 
@@ -149,13 +149,11 @@ export function DrawerListPanel({ onClose }: DrawerListPanelProps) {
       </div>
 
       <footer className="border-t p-3">
-        <Button className="w-full" onClick={() => setCutlistOpen(true)}>
+        <Button className="w-full" onClick={onOpenCutlist}>
           <ListChecks className="size-4" />
           View cutlist
         </Button>
       </footer>
-
-      <CutlistDialog open={cutlistOpen} onOpenChange={setCutlistOpen} />
     </aside>
   )
 }
