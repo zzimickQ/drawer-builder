@@ -54,8 +54,9 @@ export function planToText(result: OptimizationResult, unit: DisplayUnit): strin
     )
     lines.push('  Cuts:')
     for (const c of m.cuts) {
+      const side = c.length >= Math.max(c.sourceW, c.sourceH) ? 'long' : 'short'
       lines.push(
-        `    ${c.n}. ${c.source} → ${formatMm(c.length, unit)} ${unit} at ${formatMm(c.position, unit)} ${unit} → ${c.results.map((r) => r.label).join(' | ')}`,
+        `    ${c.n}. Measure ${formatMm(c.position, unit)} ${unit} from the ${c.dir === 'v' ? 'left' : 'top'}, cut across the ${side} side (${formatMm(c.length, unit)} ${unit}) — ${c.source} → ${c.results.map((r) => r.label).join(' | ')}`,
       )
     }
     lines.push('')

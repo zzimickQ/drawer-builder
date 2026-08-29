@@ -31,6 +31,8 @@ interface CutlistState {
   showLabels: boolean
   /** Hide the material column in the parts/stock tables. */
   showMaterials: boolean
+  /** Draw each part's label inside the layout diagram. */
+  showDiagramLabels: boolean
   /** Last optimization plan (never persisted — recomputed on demand). */
   result: OptimizationResult | null
   /** Whether a plan has been produced; restores the plan on reload. */
@@ -43,6 +45,7 @@ interface CutlistState {
   patchOptions: (patch: Partial<OptimizationOptions>) => void
   setShowLabels: (show: boolean) => void
   setShowMaterials: (show: boolean) => void
+  setShowDiagramLabels: (show: boolean) => void
   setResult: (result: OptimizationResult | null) => void
   /** First-time only: import every drawer's boards as parts. */
   bootstrap: () => void
@@ -58,6 +61,7 @@ export const useCutlistStore = create<CutlistState>()(
       options: { ...DEFAULT_OPTIONS },
       showLabels: true,
       showMaterials: true,
+      showDiagramLabels: true,
       result: null,
       calculated: false,
       initialized: false,
@@ -69,6 +73,7 @@ export const useCutlistStore = create<CutlistState>()(
         set((s) => ({ options: { ...s.options, ...patch } })),
       setShowLabels: (show) => set({ showLabels: show }),
       setShowMaterials: (show) => set({ showMaterials: show }),
+      setShowDiagramLabels: (show) => set({ showDiagramLabels: show }),
       setResult: (result) => set({ result, calculated: result !== null }),
 
       bootstrap: () => {
@@ -96,6 +101,7 @@ export const useCutlistStore = create<CutlistState>()(
         options: state.options,
         showLabels: state.showLabels,
         showMaterials: state.showMaterials,
+        showDiagramLabels: state.showDiagramLabels,
         calculated: state.calculated,
         initialized: state.initialized,
       }),

@@ -118,6 +118,11 @@ export interface CutStep {
   position: number
   /** Resulting panels after the cut. */
   results: { label: string; w: number; h: number }[]
+  /** 'v' = vertical cut (measure from the left edge), 'h' = horizontal (measure from the top). */
+  dir: 'v' | 'h'
+  /** Source panel dimensions (mm) — used to report which side the cut crosses. */
+  sourceW: number
+  sourceH: number
 }
 
 export interface Mosaic {
@@ -1120,6 +1125,9 @@ function cutsOfTree(root: CutNode, sheetLabelArg: string): CutStep[] {
       source: sourceLabel,
       length: node.dir === 'v' ? round2(node.rect.h) : round2(node.rect.w),
       position: round2(node.at),
+      dir: node.dir,
+      sourceW: round2(node.rect.w),
+      sourceH: round2(node.rect.h),
       results: [
         { label: aLabel.label, w: aLabel.w, h: aLabel.h },
         { label: bLabel.label, w: bLabel.w, h: bLabel.h },
