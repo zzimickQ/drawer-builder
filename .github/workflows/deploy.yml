@@ -31,11 +31,11 @@ jobs:
         run: npm ci
 
       - name: Build
-        # VITE_BASE=/drawer_builder/ matches the default repo-relative base;
-        # set it explicitly so the workflow is self-contained.
+        # VITE_BASE=/drawer-builder/ matches the GitHub repo name so asset
+        # URLs are correct on GitHub Pages.
         run: npm run build
         env:
-          VITE_BASE: /drawer_builder/
+          VITE_BASE: /drawer-builder/
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
