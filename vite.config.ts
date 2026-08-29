@@ -5,6 +5,9 @@ import { defineConfig } from 'vite'
 
 // https://vite.dev/config/
 export default defineConfig({
+  // GitHub Pages serves project sites under /<repo>/ — set VITE_BASE to
+  // override, e.g. VITE_BASE=/ if deploying to a user/org site.
+  base: process.env.VITE_BASE ?? '/drawer_builder/',
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
